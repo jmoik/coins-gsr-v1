@@ -1,0 +1,17 @@
+[package]
+name = "coins-gsr-protocol"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+coins-crypto.workspace = true
+coins-types.workspace = true
+serde.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+ark-bn254 = "0.4"
+hex = "0.4"
+serde_json = "1"
+
