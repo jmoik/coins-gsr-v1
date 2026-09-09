@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "inspected_on": "2026-09-09",
+  "sources": [
+    {
+      "name": "coins",
+      "url": "https://github.com/coins/coins.git",
+      "revision": "155bd901133c9f1ffbc98f98c26cb9a01dd81a83",
+      "use": "native Coins account, BLS signature and transfer semantics",
+      "license": "No repository-level license found at the pinned revision; do not copy source until clarified"
+    },
+    {
+      "name": "coins-sp1-withdrawal-milestone",
+      "path": "../groth16/tools/coins-sp1",
+      "repository_revision": "751d51baa8010edcba5a5c435ff1283ad2061493",
+      "use": "proof-wrapper, verifier-adapter and bounded withdrawal reference",
+      "license": "No repository-level license found at the pinned revision; use as local behavioral reference pending clarification"
+    },
+    {
+      "name": "op-tx-linearization",
+      "path": "../utxo-linearization-op-tx",
+      "repository_revision": null,
+      "use": "local OP_TX lineage reference",
+      "license": "Standalone local experiment has no repository metadata or explicit license; use as behavioral reference"
+    },
+    {
+      "name": "utxo-linearization-draft",
+      "path": "../../utxo-linearization-v0.1.0-en/bip-utxo-linearization.md",
+      "repository_revision": null,
+      "use": "state envelope, caboose and ancestry design reference",
+      "license": "Draft explicitly leaves license unspecified; do not redistribute it as project source"
+    },
+    {
+      "name": "op-tx-bip",
+      "path": "../../bips-gsr-full/bip-unknown-optx.md",
+      "repository_revision": "26f3fb10398a64da8f0b28bf1a763832ee51346c",
+      "use": "six-byte selector and OP_TX execution semantics"
+    },
+    {
+      "name": "gsr-core",
+      "path": "../../core/gsr/gsr-full",
+      "repository_revision": "7debf4af93120d23ced6817d4d8c4bf89ea57d5a",
+      "use": "experimental consensus and regtest backend",
+      "working_tree_note": "Dirty at planning time; implementation must use a clean pinned checkout or record an exact patch"
+    }
+  ]
+}
