@@ -1,0 +1,62 @@
+--- a/src/worker/controller/global.rs
++++ b/src/worker/controller/global.rs
+@@ -78,7 +78,7 @@
+         elf_artifact: Artifact,
+         common_input_artifact: Artifact,
+         context: TaskContext,
+-        memory: UnsafeMemory,
++        _memory: UnsafeMemory,
+         opts: SP1CoreOpts,
+         num_deferred_proofs: usize,
+         artifact_client: impl ArtifactClient,
+@@ -103,6 +103,7 @@
+                 // Collect the addresses
+                 while let Some(addresses) = self.0.blocking_recv() {
+                     let SpliceAddresses { start_clk, end_clk, addresses } = addresses;
++                    let _ = (start_clk, end_clk);
+                     for addr in addresses {
+                         #[cfg(sp1_debug_global_memory)]
+                         touched_addresses.insert(addr);
+@@ -111,38 +112,10 @@
+                             .entry(addr)
+                             .or_insert_with(|| MemoryInitializeFinalizeEvent::initialize(addr, 0));
+ 
+-                        // Get the memory value
+-                        // # Safety: since we are waiting for the minimal executor to finish, we assume that
+-                        // it is still alive. However, if it did panic, the whole proof flow should fail
+-                        // but the potential for undefined behavior is still there.
+-                        let value = unsafe { memory.get(addr) };
+-                        // If the value was touched after this splice has finished, add it to the 
+-                        // dirty addresses set and skip the finalization.
+-                        if value.clk > end_clk || value.clk < start_clk {
+-                            dirty_addresses.insert(addr);
+-                            continue;
+-                        }
+-                        // Add the address to the finalized events map. If it was already seen, 
+-                        // update the value, timestamp and clk. Otherwise, create a new event and 
+-                        // add it to the map.
+-                        finalized_events
+-                            .entry(addr)
+-                            .and_modify(|entry| {
+-                                if entry.timestamp < value.clk {
+-                                   entry.value = value.value;
+-                                   entry.timestamp = value.clk;
+-                                }
+-                            })
+-                            .or_insert_with(|| {
+-                                MemoryInitializeFinalizeEvent::finalize(
+-                                    addr,
+-                                    value.value,
+-                                    value.clk,
+-                                )
+-                            });
+-                        // If the address was previously dirty, remove it from the dirty addresses
+-                        // set.
+-                        dirty_addresses.remove(&addr);
++                        // The portable executor can replace its COW page tables
++                        // while running. Collect addresses now, and read their
++                        // final values only after receiving executor ownership.
++                        dirty_addresses.insert(addr);
+                     }
+                 }
+ 

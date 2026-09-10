@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/protocol"]
+exclude = ["crates/prover-host", "guest"]
 resolver = "2"
 
 [workspace.package]
@@ -11,4 +12,3 @@ coins-crypto = { git = "https://github.com/coins/coins.git", rev = "155bd901133c
 coins-types = { git = "https://github.com/coins/coins.git", rev = "155bd901133c9f1ffbc98f98c26cb9a01dd81a83" }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
-

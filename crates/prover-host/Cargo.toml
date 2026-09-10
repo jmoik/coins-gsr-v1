@@ -1,0 +1,68 @@
+[package]
+name = "coins-gsr-prover-host"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+ark-bn254 = "0.5"
+ark-ec = "0.5"
+ark-ff = "0.5"
+ark-groth16 = "0.5"
+coins-crypto = { git = "https://github.com/coins/coins.git", rev = "155bd901133c9f1ffbc98f98c26cb9a01dd81a83" }
+coins-gsr-protocol = { path = "../protocol", features = ["fixtures"] }
+coins-types = { git = "https://github.com/coins/coins.git", rev = "155bd901133c9f1ffbc98f98c26cb9a01dd81a83" }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+# SP1's internal crates use semver-compatible requirements even though releases
+# are not API-compatible. Keep the complete prover graph on the audited release.
+slop-air = "=6.0.1"
+slop-algebra = "=6.0.1"
+slop-alloc = "=6.0.1"
+slop-baby-bear = "=6.0.1"
+slop-basefold = "=6.0.1"
+slop-basefold-prover = "=6.0.1"
+slop-bn254 = "=6.0.1"
+slop-challenger = "=6.0.1"
+slop-commit = "=6.0.1"
+slop-dft = "=6.0.1"
+slop-fri = "=6.0.1"
+slop-futures = "=6.0.1"
+slop-jagged = "=6.0.1"
+slop-keccak-air = "=6.0.1"
+slop-koala-bear = "=6.0.1"
+slop-matrix = "=6.0.1"
+slop-maybe-rayon = "=6.0.1"
+slop-merkle-tree = "=6.0.1"
+slop-multilinear = "=6.0.1"
+slop-poseidon2 = "=6.0.1"
+slop-primitives = "=6.0.1"
+slop-stacked = "=6.0.1"
+slop-sumcheck = "=6.0.1"
+slop-symmetric = "=6.0.1"
+slop-tensor = "=6.0.1"
+slop-uni-stark = "=6.0.1"
+slop-utils = "=6.0.1"
+slop-whir = "=6.0.1"
+sp1-build = "=6.0.1"
+sp1-core-executor = "=6.0.1"
+sp1-core-machine = "=6.0.1"
+sp1-cuda = "=6.0.1"
+sp1-curves = "=6.0.1"
+sp1-derive = "=6.0.1"
+sp1-hypercube = "=6.0.1"
+sp1-jit = "=6.0.1"
+sp1-primitives = "=6.0.1"
+sp1-prover = "=6.0.1"
+sp1-prover-types = "=6.0.1"
+sp1-recursion-circuit = "=6.0.1"
+sp1-recursion-compiler = "=6.0.1"
+sp1-recursion-executor = "=6.0.1"
+sp1-recursion-gnark-ffi = "=6.0.1"
+sp1-recursion-machine = "=6.0.1"
+sp1-sdk = { version = "=6.0.1", features = ["blocking", "native-gnark", "profiling"] }
+sp1-verifier = { version = "=6.0.1", features = ["ark"] }

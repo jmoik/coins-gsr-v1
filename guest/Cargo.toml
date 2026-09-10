@@ -1,0 +1,21 @@
+[package]
+name = "coins-gsr-guest"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+coins-gsr-protocol = { path = "../crates/protocol", features = ["accelerated"] }
+# Keep the acceleration crate's SP1 syscall dependencies aligned with the zkVM.
+slop-algebra = "=6.0.1"
+slop-bn254 = "=6.0.1"
+slop-challenger = "=6.0.1"
+slop-koala-bear = "=6.0.1"
+slop-poseidon2 = "=6.0.1"
+slop-primitives = "=6.0.1"
+slop-symmetric = "=6.0.1"
+sp1-lib = "=6.0.1"
+sp1-primitives = "=6.0.1"
+sp1-zkvm = "=6.0.1"

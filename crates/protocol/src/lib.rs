@@ -1,9 +1,12 @@
 //! Canonical bounded Coins + GSR v1 state-transition model.
 
-use coins_crypto::{G1, G2, verify};
+use coins_crypto::{G1, G2};
 use coins_types::{NATIVE_TOKEN_ID, Transaction};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+#[cfg(feature = "accelerated")]
+mod crypto;
 
 pub const ACCOUNT_COUNT: usize = 3;
 pub const TRANSFER_SENDER_ID: u32 = 0;
@@ -118,7 +121,7 @@ pub struct Deposit {
     pub recipient_id: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Collection {
     pub bridge_id: [u8; 32],
     pub bridge_prevout: OutPoint,
@@ -127,7 +130,7 @@ pub struct Collection {
     pub deposits: [Deposit; 2],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settlement {
     pub bridge_id: [u8; 32],
     pub bridge_prevout: OutPoint,
@@ -151,6 +154,19 @@ pub struct Transition {
     pub statement: Vec<u8>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ProofInput {
+    Collect(Collection),
+    TransferWithdraw(Settlement),
+}
+
+pub fn validate_proof_input(input: &ProofInput) -> Result<Vec<u8>, Error> {
+    match input {
+        ProofInput::Collect(collection) => Ok(apply_collection(collection)?.statement),
+        ProofInput::TransferWithdraw(settlement) => Ok(apply_settlement(settlement)?.statement),
+    }
+}
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
@@ -163,6 +179,19 @@ fn require_backing(state: &AccountState, supplied: u64) -> Result<(), Error> {
         return Err(Error::InvalidBacking);
     }
     Ok(())
+}
+
+fn valid_signature(key: &G1, message: &[u8], signature: &G2) -> bool {
+    let Some(point) = signature.to_affine() else {
+        return false;
+    };
+    if point.infinity || G2::from_affine(&point) != *signature {
+        return false;
+    }
+    #[cfg(feature = "accelerated")]
+    return crypto::verify_decoded_signature(key, message, point);
+    #[cfg(not(feature = "accelerated"))]
+    coins_crypto::verify(key, message, signature)
 }
 
 fn statement_prefix(
@@ -293,11 +322,11 @@ pub fn apply_settlement(input: &Settlement) -> Result<Transition, Error> {
     let mut new_state = input.old_state.clone();
     let sender = &input.old_state.accounts[TRANSFER_SENDER_ID as usize];
     let native_message = transfer.message_to_sign(sender.nonce);
-    if !verify(&sender.key, &native_message, &input.transfer_signature) {
+    if !valid_signature(&sender.key, &native_message, &input.transfer_signature) {
         return Err(Error::InvalidTransferSignature);
     }
     let scoped_message = scoped_transfer_message(&input.bridge_id, &native_message);
-    if !verify(
+    if !valid_signature(
         &sender.key,
         &scoped_message,
         &input.scoped_transfer_signature,
@@ -335,7 +364,7 @@ pub fn apply_settlement(input: &Settlement) -> Result<Transition, Error> {
         input.withdrawal_amount,
         &input.withdrawal_destination,
     )?;
-    if !verify(
+    if !valid_signature(
         &withdrawing.key,
         &withdrawal_message,
         &input.withdrawal_signature,
@@ -429,6 +458,85 @@ pub fn encode_compact_size(value: u64, output: &mut Vec<u8>) {
         _ => {
             output.push(0xff);
             output.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+}
+
+#[cfg(feature = "fixtures")]
+pub mod fixtures {
+    use super::*;
+    use ark_bn254::Fr;
+    use coins_crypto::{SecretKey, sign};
+
+    pub fn keys() -> ([SecretKey; 3], [G1; 3]) {
+        let secrets = [11_u64, 12, 13].map(|value| SecretKey(Fr::from(value)));
+        let public = secrets.map(|secret| G1(secret.public_key()));
+        (secrets, public)
+    }
+
+    pub fn collection() -> Collection {
+        let (_, public) = keys();
+        Collection {
+            bridge_id: [0x42; 32],
+            bridge_prevout: OutPoint {
+                txid: [0x31; 32],
+                vout: 0,
+            },
+            old_state: AccountState::zero(public).unwrap(),
+            old_backing: RESERVE,
+            deposits: [
+                Deposit {
+                    outpoint: OutPoint {
+                        txid: [0x41; 32],
+                        vout: 1,
+                    },
+                    value: 120_000,
+                    recipient_id: 0,
+                },
+                Deposit {
+                    outpoint: OutPoint {
+                        txid: [0x52; 32],
+                        vout: 2,
+                    },
+                    value: 80_000,
+                    recipient_id: 1,
+                },
+            ],
+        }
+    }
+
+    pub fn settlement() -> Settlement {
+        let (secret, public) = keys();
+        let collected = apply_collection(&collection()).unwrap();
+        let transfer = Transaction {
+            sender_id: 0,
+            recipient_pk: public[1],
+            token_id: NATIVE_TOKEN_ID,
+            amount: 50_000,
+            fee: 1,
+        };
+        let native_message = transfer.message_to_sign(collected.new_state.accounts[0].nonce);
+        let bridge_id = [0x42; 32];
+        let destination = [vec![0x51, 0x20], vec![0x77; 32]].concat();
+        let withdrawal = withdrawal_message(&bridge_id, 0, 60_000, &destination).unwrap();
+        Settlement {
+            bridge_id,
+            bridge_prevout: OutPoint {
+                txid: [0x61; 32],
+                vout: 0,
+            },
+            old_backing: collected.new_backing,
+            old_state: collected.new_state,
+            transfer,
+            transfer_signature: sign(&secret[0], &native_message),
+            scoped_transfer_signature: sign(
+                &secret[0],
+                &scoped_transfer_message(&bridge_id, &native_message),
+            ),
+            withdrawal_nonce: 0,
+            withdrawal_amount: 60_000,
+            withdrawal_destination: destination,
+            withdrawal_signature: sign(&secret[1], &withdrawal),
         }
     }
 }
