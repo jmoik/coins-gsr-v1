@@ -43,6 +43,12 @@ scalability claims. No privacy is added: deposits, payouts, and the bridge UTXO
 remain public. Glass Coins, batching and a decentralized DA layer are separate
 future protocols.
 
+The three account secrets (`11`, `12`, and `13` as BN254 scalars) and all Bitcoin
+refund secrets are public deterministic regtest fixtures. They demonstrate that
+the proof checks genuine Coins signatures; they provide no user authentication
+or secrecy outside this isolated deployment. They are not a bridge authority:
+knowing them cannot bypass lineage, backing, or proof verification.
+
 ## Review rule
 
 Every negative test must identify the guard it reaches. Native verification,

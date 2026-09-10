@@ -1,7 +1,8 @@
 # Coins + GSR v1 — Implementation Plan
 
-Status: proposed implementation plan, 2026-09-09. No implementation or fresh
-proof/regtest validation has been performed in this repository.
+Status: bounded v1 implemented and validated on 2026-09-10. All ten milestone
+purposes below are complete; exact evidence and remaining limitations are in
+`results/v1.md`.
 
 ## 1. Outcome and scope
 

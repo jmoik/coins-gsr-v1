@@ -1,13 +1,27 @@
 # Bounded Bridge Protocol
 
-Status: design contract for implementation. Byte-level choices in this document
-must be covered by golden vectors before a verification key is generated.
+Status: implemented bounded-regtest protocol. Byte-level choices are covered by
+the retained vectors and proof-authorized lifecycle in `fixtures/v1`.
 
 ## Deployment constants
 
 A deployment fixes the GSR Core and BIP revisions, complete NUMS Taproot program
 `P`, proof deployment identity, three ordered account public keys, caboose value
 `c = 330 sat`, and unissued reserve `r = 1,000 sat`.
+
+The retained bounded-regtest deployment has:
+
+```text
+guest ELF SHA256   3b0a8aba36a0ced4b6a3ef658d45e61ae4bcfbcc283276d0814e70302cc84473
+SP1 program key    0000688ca06f69f806f59cc453716875b5fdb1adc964919592d90feae78e6e56
+SP1 Groth16 VK     0e78f4db7a6771a3a6a7d9c3b0de6fe73d58781368967a7fe84d87aefffec896
+zero account root  1f18ff4555c14b881530ed0f0758734d1a11ea1dce8ded843f076314d14e6825
+P scriptPubKey     512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd1
+```
+
+`P` has two `0xc2` leaves under the fixed NUMS internal key: an 81,417-byte
+collection program and a 78,505-byte settlement program. Both append the same
+76,400-byte verifier. There is no known key-path secret.
 
 The bridge instance identity is the raw 32-byte txid of its genesis transaction.
 The identity is stored in ACTIVE state and proof statements, not in the stable
@@ -171,6 +185,36 @@ Action-specific lengths are exact; trailing bytes fail. The SP1 wrapper proves
 the SHA256 digest of these public values. The bridge Script constructs or checks
 the same bytes from authenticated transaction data before executing the fixed
 GSR verifier.
+
+## Witness layout
+
+The GSR verifier witness is deepest and retains its generator-defined order.
+Its second item from the bottom is the normalized little-endian SP1 statement
+digest scalar. The covenant prefix verifies that scalar against the supplied
+public-value bytes, consumes every application item, and leaves the original
+verifier stack unchanged.
+
+```text
+collection input 0:
+  verifier_stack..., parent, ancestor, old_state, new_state, bridge_id,
+  recipient_a, refund_key_a, recipient_b, refund_key_b, public_values,
+  collection_leaf, control_block
+
+settlement input 0:
+  verifier_stack..., parent, ancestor, old_state, new_state, bridge_id,
+  public_values, settlement_leaf, control_block
+
+deposit collection input:
+  parent, old_state, false, deposit_leaf, control_block
+
+deposit refund input:
+  BIP340_signature, true, deposit_leaf, control_block
+```
+
+`parent` and `ancestor` are serialized without witness. The prefix authenticates
+them against actual OP_TX prevouts before trusting their state or program bytes.
+The application cannot supply selectors: every six-byte selector is a constant
+in the leaves.
 
 ## Reorganizations and concurrency
 
