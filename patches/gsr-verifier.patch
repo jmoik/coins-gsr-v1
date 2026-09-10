@@ -1,0 +1,94 @@
+--- a/src/dsl/bn254/verifier.rs
++++ b/src/dsl/bn254/verifier.rs
+@@ -1204,9 +1204,11 @@
+     pub(crate) fn monolithic_artifact(
+         &self,
+         fixture: &fixtures::DeterministicGroth16Fixture,
+-        input0: u64,
+-        input1: u64,
++        input0: impl Into<BigUint>,
++        input1: impl Into<BigUint>,
+     ) -> MonolithicVerifierArtifact {
++        let input0 = input0.into();
++        let input1 = input1.into();
+         const CANONICAL_INPUT0: usize = 1;
+         const CANONICAL_INPUT1: usize = 2;
+         const CANONICAL_A: usize = 3;
+@@ -1237,8 +1239,8 @@
+         let neg_a = fixture.proof_a.neg();
+         let neg_b = fixture.proof_b.neg();
+         let mut canonical = vec![fp::modulus()];
+-        canonical.push(BigUint::from(input0).to_bytes_le());
+-        canonical.push(BigUint::from(input1).to_bytes_le());
++        canonical.push(if input0.bits() == 0 { vec![] } else { input0.to_bytes_le() });
++        canonical.push(if input1.bits() == 0 { vec![] } else { input1.to_bytes_le() });
+         canonical.extend(fixture.proof_a.to_stack());
+         canonical.extend(fixture.proof_b.to_stack());
+         canonical.extend(fixture.proof_c.to_stack());
+@@ -2208,8 +2210,8 @@
+     pub(crate) fn verify_fixture_inputs_with_fused_residue_report(
+         &self,
+         fixture: &fixtures::DeterministicGroth16Fixture,
+-        input0: u64,
+-        input1: u64,
++        input0: impl Into<BigUint>,
++        input1: impl Into<BigUint>,
+     ) -> Groth16ResidueReplayReport {
+         self.verify_fixture_inputs_with_fused_residue_candidate(fixture, input0, input1, None)
+     }
+@@ -2217,8 +2219,8 @@
+     fn verify_fixture_inputs_with_fused_residue_candidate(
+         &self,
+         fixture: &fixtures::DeterministicGroth16Fixture,
+-        input0: u64,
+-        input1: u64,
++        input0: impl Into<BigUint>,
++        input1: impl Into<BigUint>,
+         residue_candidate: Option<ResidueWitness>,
+     ) -> Groth16ResidueReplayReport {
+         self.steps.borrow_mut().clear();
+@@ -2670,19 +2672,15 @@
+ 
+     fn verified_vkx_from_script(
+         &self,
+-        input0: u64,
+-        input1: u64,
++        input0: impl Into<BigUint>,
++        input1: impl Into<BigUint>,
+         ic0: &G1Affine,
+         ic1: &G1Affine,
+         ic2: &G1Affine,
+     ) -> [Vec<u8>; 2] {
+-        let witness = vkx::runtime_glv_trace_witness(
+-            &BigUint::from(input0),
+-            &BigUint::from(input1),
+-            ic0,
+-            ic1,
+-            ic2,
+-        );
++        let input0 = input0.into();
++        let input1 = input1.into();
++        let witness = vkx::runtime_glv_trace_witness(&input0, &input1, ic0, ic1, ic2);
+         let actual = self.g1_affine_verifier_step(
+             format!("vk_x runtime GLV trace input0={input0} input1={input1}"),
+             vkx::constrain_runtime_glv_vkx_trace(ic0.to_stack_array(), witness.table_blob.clone()),
+--- a/src/dsl/bn254/mod.rs
++++ b/src/dsl/bn254/mod.rs
+@@ -17,3 +17,5 @@
+ #[cfg(test)]
+ pub(crate) mod verifier;
+ pub mod vkx;
++#[cfg(test)]
++mod coins_gsr_adapter;
+--- a/src/test_util.rs
++++ b/src/test_util.rs
+@@ -12,7 +12,8 @@
+ 
+ pub(crate) const DEFAULT_BITCOIN_UTIL: &str =
+     "/Users/julian/Code/bitcoin/core/gsr/gsr-full/build/bin/bitcoin-util";
+-pub(crate) const LARGE_VAROPS_BUDGET: u64 = 100_000_000;
++// Fragment replay only; final checks use a transaction-weight-derived budget.
++pub(crate) const LARGE_VAROPS_BUDGET: u64 = 2_000_000_000;
+ 
+ #[derive(Debug)]
+ pub(crate) struct GsrEval {

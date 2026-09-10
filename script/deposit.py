@@ -79,6 +79,21 @@ def _check_collection_transaction(builder: Builder, name: str) -> None:
     builder.equal_slice(name, 299, bytes(4))
 
 
+def _check_settlement_transaction(builder: Builder, name: str) -> None:
+    builder.get(name)
+    builder.op(OP_SIZE, 0, 1)
+    builder.number(264)
+    builder.op(OP_EQUALVERIFY, 2, 0)
+    builder.op(OP_DROP, 1, 0)
+    builder.equal_slice(name, 0, b"\x02\x00\x00\x00\x02")
+    for offset in (41, 82):
+        builder.equal_slice(name, offset, b"\x00\xfd\xff\xff\xff")
+    _equal_number_byte(builder, name, 87, 4)
+    for offset in (96, 139, 182, 225):
+        builder.equal_slice(name, offset, b"\x22")
+    builder.equal_slice(name, 260, bytes(4))
+
+
 def _collection_context(builder: Builder, sponsor_spk: bytes) -> None:
     builder.tx(TX_SHAPE)
     builder.push(bytes.fromhex("02000000000000000400000003000000"))
@@ -271,11 +286,20 @@ def _deposit_collection_body() -> bytes:
     builder.op(OP_HASH256, 1, 1)
     builder.slice("prevouts", 0, 32)
     builder.op(OP_EQUALVERIFY, 2, 0)
-    _is_size(builder, "parent", 303)
+    _is_size(builder, "parent", 137)
 
     def active(branch: Builder) -> None:
-        _check_collection_transaction(branch, "parent")
-        _check_parent_output(branch, 170, 179, 256, 265)
+        _is_size(branch, "parent", 303)
+
+        def collection(inner: Builder) -> None:
+            _check_collection_transaction(inner, "parent")
+            _check_parent_output(inner, 170, 179, 256, 265)
+
+        def settlement(inner: Builder) -> None:
+            _check_settlement_transaction(inner, "parent")
+            _check_parent_output(inner, 88, 97, 217, 226)
+
+        branch.branch(collection, settlement)
         branch.require_size("old_state", 73)
         branch.equal_slice("old_state", 0, MAGIC + bytes([STATE_VERSION, 1]))
         branch.slice("old_state", 9, 32)
@@ -292,7 +316,7 @@ def _deposit_collection_body() -> bytes:
         branch.get("bridge_id")
         branch.op(OP_EQUALVERIFY, 2, 0)
 
-    builder.branch(active, genesis)
+    builder.branch(genesis, active)
     return builder.finish()
 
 

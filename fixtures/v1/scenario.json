@@ -1,0 +1,112 @@
+{
+  "status": "deterministic-proof-inputs-not-yet-mined",
+  "bridge_script_pubkey": "512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd1",
+  "collection_script_bytes": 81417,
+  "settlement_script_bytes": 78505,
+  "genesis_root": "1f18ff4555c14b881530ed0f0758734d1a11ea1dce8ded843f076314d14e6825",
+  "bridge_id": "a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c0",
+  "refund_txid": "968e9c8393b4f79c7306a66c987bb1fb677fda2b10b3c846fef9ae64a41213ad",
+  "requests": {
+    "collection-1": {
+      "action": "collect",
+      "bridge_id": "a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c0",
+      "bridge_prevout": {
+        "txid": "a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c0",
+        "vout": 0
+      },
+      "old_balances": [
+        0,
+        0,
+        0
+      ],
+      "old_nonces": [
+        0,
+        0,
+        0
+      ],
+      "deposits": [
+        {
+          "outpoint": {
+            "txid": "2ffa3147f5eb765f9f3b033e63ec1c49ef105129aef365364e1d07748ddd8d6c",
+            "vout": 0
+          },
+          "value": 120000,
+          "recipient_id": 0
+        },
+        {
+          "outpoint": {
+            "txid": "958d196b778e61ece3e33f6740c5565eca7f28f62397e24c70e788a2d33f6f6b",
+            "vout": 0
+          },
+          "value": 80000,
+          "recipient_id": 1
+        }
+      ]
+    },
+    "settlement": {
+      "action": "transfer_withdraw",
+      "bridge_id": "a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c0",
+      "bridge_prevout": {
+        "txid": "596c34a49dc9ffdf67a9002f543d17e1d8062097c74a087fdaaed582ed682b77",
+        "vout": 0
+      },
+      "old_balances": [
+        120000,
+        80000,
+        0
+      ],
+      "old_nonces": [
+        0,
+        0,
+        0
+      ],
+      "transfer_amount": 50000,
+      "transfer_fee": 1,
+      "withdrawal_nonce": 0,
+      "withdrawal_amount": 60000,
+      "withdrawal_destination": "51207777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "collection-2": {
+      "action": "collect",
+      "bridge_id": "a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c0",
+      "bridge_prevout": {
+        "txid": "2dd0503d40a7b713f1205ed86ccc147d8975960759022a85a6b8be7cdb32526e",
+        "vout": 0
+      },
+      "old_balances": [
+        69999,
+        70000,
+        1
+      ],
+      "old_nonces": [
+        1,
+        1,
+        0
+      ],
+      "deposits": [
+        {
+          "outpoint": {
+            "txid": "8c1e70bc3e942164b8b79fab8d1cb131452c497946c354db51562e27249e6567",
+            "vout": 0
+          },
+          "value": 30000,
+          "recipient_id": 2
+        },
+        {
+          "outpoint": {
+            "txid": "c795944c748921b4a255fc974d0778869bd603fdbee223d497d038da8852a415",
+            "vout": 0
+          },
+          "value": 20000,
+          "recipient_id": 0
+        }
+      ]
+    }
+  },
+  "transactions": {
+    "genesis": "020000000120ad42a447b5b0327e4ea47e7baba88a89166011cedaa446f908269cea74a8380000000000fdffffff02e80300000000000022512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd14a010000000000002200201afb9a2414b8c5d7cf7e31ff2e575f9507605a548aa42a58da7bbe312be76c0d00000000",
+    "collection-1": "0200000004a37e447ad2953215a23b1a48967017316e08a4d8cb88bc0e61bba27ce0a852c00000000000fdffffff2ffa3147f5eb765f9f3b033e63ec1c49ef105129aef365364e1d07748ddd8d6c0000000000fdffffff958d196b778e61ece3e33f6740c5565eca7f28f62397e24c70e788a2d33f6f6b0000000000fdffffff9019b8db235ac52ef97b027f0f91e2dd6d5f9853323e18c528ca4236e9c31aad0000000000fdffffff03281103000000000022512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd1465e0100000000002200204ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc332604a0100000000000022002061bff735ead92078b9cc7a30ac63f1a5aee9d4309f4bdc759e276fcde2f0a8ea00000000",
+    "settlement": "0200000002596c34a49dc9ffdf67a9002f543d17e1d8062097c74a087fdaaed582ed682b770000000000fdffffffa25831950aa6bd8e3a479fbdebf78ebbfb8479efeee0d8d9e0baff47090e908d0000000000fdffffff04c82602000000000022512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd160ea0000000000002251207777777777777777777777777777777777777777777777777777777777777777465e0100000000002200204ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc332604a01000000000000220020507a353549e52e1bf4b80896969ad6f27826463617574fbc38e85cc703bb2faf00000000",
+    "collection-2": "02000000042dd0503d40a7b713f1205ed86ccc147d8975960759022a85a6b8be7cdb32526e0000000000fdffffff8c1e70bc3e942164b8b79fab8d1cb131452c497946c354db51562e27249e65670000000000fdffffffc795944c748921b4a255fc974d0778869bd603fdbee223d497d038da8852a4150000000000fdffffff4629d0149e9f846cc49a67b6048a171a945571539854e4f6d4abaf422f1bf4810000000000fdffffff0318ea02000000000022512005177fa3de9c3040fd0e6bbc2c27df8c33da505edcbd95608b0fa21a0e443fd1465e0100000000002200204ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc332604a010000000000002200209c886f6160991897308eea99952ffcdf401e135f30b82c7cd86b0f3bfe32684a00000000"
+  }
+}

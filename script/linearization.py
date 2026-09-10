@@ -152,6 +152,12 @@ class Builder:
         self.number(1)
         return bytes(self.code)
 
+    def finish_prefix(self) -> bytes:
+        """Consume tracked application inputs without touching a lower base stack."""
+        while self.names:
+            self.op(OP_DROP, 1, 0)
+        return bytes(self.code)
+
 
 def _make_caboose(builder: Builder, state_name: str, result_name: str) -> None:
     builder.get(state_name)
