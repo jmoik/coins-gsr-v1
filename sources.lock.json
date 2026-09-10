@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "inspected_on": "2026-09-09",
+  "inspected_on": "2026-09-10",
   "sources": [
     {
       "name": "coins",
@@ -15,6 +15,30 @@
       "repository_revision": "751d51baa8010edcba5a5c435ff1283ad2061493",
       "use": "proof-wrapper, verifier-adapter and bounded withdrawal reference",
       "license": "No repository-level license found at the pinned revision; use as local behavioral reference pending clarification"
+    },
+    {
+      "name": "gsr-groth16-verifier",
+      "path": "../../zk/groth16",
+      "repository_revision": "343dfd85160e560cb38e721b9bc7af27b897a529",
+      "use": "GSR-only BN254 verifier generator imported through a minimal retained patch",
+      "local_patch": "patches/gsr-verifier.patch",
+      "local_patch_sha256": "230feca6fef7c42c9f220a27ac26d1c6ca54f0398fa1c7d8e9a25da971d8a9c5",
+      "license": "No repository-level license found at the pinned revision"
+    },
+    {
+      "name": "sp1",
+      "url": "https://github.com/succinctlabs/sp1.git",
+      "revision": "v6.0.1",
+      "use": "zkVM guest, CPU prover and Groth16 wrapper",
+      "local_patch": "patches/sp1-deferred-memory.patch",
+      "local_patch_sha256": "fead0d0264c00f7274903a27833c2c337a35d2f339c4a72eb807997a4894fb6d",
+      "license": "MIT and Apache-2.0"
+    },
+    {
+      "name": "sp1-patches-bn",
+      "url": "https://github.com/sp1-patches/bn.git",
+      "revision": "717dbe5e2270940faa46b646c6b2d639c82fb949",
+      "use": "SP1 BN254 pairing syscalls for the Coins BLS relation"
     },
     {
       "name": "op-tx-linearization",
@@ -41,7 +65,10 @@
       "path": "../../core/gsr/gsr-full",
       "repository_revision": "7debf4af93120d23ced6817d4d8c4bf89ea57d5a",
       "use": "experimental consensus and regtest backend",
-      "working_tree_note": "Dirty at planning time; implementation must use a clean pinned checkout or record an exact patch"
+      "runtime_patch": "patches/gsr-core-runtime.patch",
+      "runtime_patch_sha256": "cd7bd318a3b196b12bfaea0c5c464f22ae330889d40a901e5ffbf2ba0df5a080",
+      "bitcoind_sha256": "a833582b794395fcdc0b32cc2f83ba4645e89bed6e3c8a4e65973a8d1655041d",
+      "bitcoin_util_sha256": "4b159aa252dc530b4d0e3fc748a7c9a009153f34ba17282f6304e7be1c0130ae"
     }
   ]
 }

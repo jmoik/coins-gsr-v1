@@ -1,0 +1,331 @@
+diff --git a/src/script/interpreter.cpp b/src/script/interpreter.cpp
+index f0dfb7b5f1..e4488e0ffe 100644
+--- a/src/script/interpreter.cpp
++++ b/src/script/interpreter.cpp
+@@ -48,17 +48,24 @@ inline bool set_error(ScriptError* ret, const ScriptError serror)
+     return false;
+ }
+ 
+-static constexpr size_t MAX_EXECUTED_MACRO_BODY_BYTES{MAX_TAPSCRIPT_V2_STACK_ELEMENT_SIZE};
+-
+-struct MacroExecutionState {
+-    std::array<std::optional<CScript>, 256> definitions;
+-    uint64_t executed_body_bytes{0};
++static constexpr size_t MAX_EXECUTED_FUNCTION_BODY_BYTES{4'000'000};
++
++struct FunctionExecutionState {
++    std::array<std::optional<valtype>, 256> definitions;
++    std::array<bool, 256> active{};
++    size_t definition_count{0};
++    size_t stored_body_bytes{0};
++    size_t invoked_body_bytes{0};
+ };
+ 
+-bool ParseMacroId(const valtype& id_bytes, uint8_t& id)
++bool ParseFunctionId(const valtype& id_bytes, uint8_t& id)
+ {
+-    if (id_bytes.size() > 1) return false;
+-    id = id_bytes.empty() ? 0 : id_bytes[0];
++    if (id_bytes.empty()) {
++        id = 0;
++        return true;
++    }
++    if (id_bytes.size() != 1 || id_bytes[0] == 0) return false;
++    id = id_bytes[0];
+     return true;
+ }
+ 
+@@ -361,55 +368,6 @@ bool EvalMulti(ValtypeStack& stack, const ValtypeStack& altstack, opcodetype tar
+     return true;
+ }
+ 
+-bool IsForbiddenMacroBodyOpcode(opcodetype opcode)
+-{
+-    if (IsOpSuccess(opcode, SigVersion::TAPSCRIPT_V2)) return true;
+-
+-    switch (opcode) {
+-    case OP_MACRO:
+-    case OP_CALLMACRO:
+-    case OP_CODESEPARATOR:
+-    case OP_CHECKSIG:
+-    case OP_CHECKSIGVERIFY:
+-    case OP_CHECKSIGADD:
+-    case OP_CHECKMULTISIG:
+-    case OP_CHECKMULTISIGVERIFY:
+-    case OP_CHECKSIGFROMSTACK:
+-    case OP_TX:
+-    case OP_IF:
+-    case OP_NOTIF:
+-    case OP_VERIF:
+-    case OP_VERNOTIF:
+-    case OP_ELSE:
+-    case OP_ENDIF:
+-        return true;
+-    default:
+-        return false;
+-    }
+-}
+-
+-bool ValidateMacroBody(const CScript& body, ScriptError* serror)
+-{
+-    CScript::const_iterator pc{body.begin()};
+-    while (pc < body.end()) {
+-        opcodetype opcode;
+-        valtype push_value;
+-        if (!body.GetOp(pc, opcode, push_value)) {
+-            return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+-        }
+-        if (IsForbiddenMacroBodyOpcode(opcode)) {
+-            return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+-        }
+-        if (opcode == OP_MULTI) {
+-            opcodetype target;
+-            if (!body.GetOp(pc, target) || !IsMultiTarget(target)) {
+-                return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+-            }
+-        }
+-    }
+-    return true;
+-}
+-
+ } // namespace
+ 
+ bool CastToBool(const valtype& vch)
+@@ -1673,19 +1631,19 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript&
+ 
+ static bool EvalTapscriptV2Impl(ValtypeStack& stack, const CScript& script, script_verify_flags flags, const BaseSignatureChecker& checker,
+                                 ScriptExecutionData& execdata, varops::Budget& varops_budget, ScriptError* serror,
+-                                bool& immediate_success, MacroExecutionState* shared_macro_state = nullptr,
+-                                ValtypeStack* shared_altstack = nullptr, bool in_macro_body = false)
++                                bool& immediate_success, FunctionExecutionState* shared_function_state = nullptr,
++                                ValtypeStack* shared_altstack = nullptr, bool in_function = false)
+ {
+     static const valtype vchFalse(0);
+     static const valtype vchTrue(1, 1);
+ 
+-    MacroExecutionState local_macro_state;
+-    MacroExecutionState& macro_state{shared_macro_state ? *shared_macro_state : local_macro_state};
++    FunctionExecutionState local_function_state;
++    FunctionExecutionState& function_state{shared_function_state ? *shared_function_state : local_function_state};
+     ValtypeStack local_altstack;
+     ValtypeStack& altstack{shared_altstack ? *shared_altstack : local_altstack};
+     set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+     const bool fRequireMinimal{(flags & SCRIPT_VERIFY_MINIMALDATA) != 0};
+-    if (!in_macro_body) {
++    if (!in_function) {
+         execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
+         execdata.m_codeseparator_pos_init = true;
+         execdata.m_tapscript = script;
+@@ -1715,8 +1673,8 @@ static bool EvalTapscriptV2Impl(ValtypeStack& stack, const CScript& script, scri
+             //
+             if (!script.GetOp(pc, opcode, vchPushValue))
+                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+-            if (in_macro_body && IsForbiddenMacroBodyOpcode(opcode)) {
+-                return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
++            if (in_function && fExec && opcode == OP_CODESEPARATOR) {
++                return set_error(serror, SCRIPT_ERR_OP_CODESEPARATOR);
+             }
+             if (vchPushValue.size() > MAX_TAPSCRIPT_V2_STACK_ELEMENT_SIZE)
+                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+@@ -2403,40 +2361,57 @@ static bool EvalTapscriptV2Impl(ValtypeStack& stack, const CScript& script, scri
+                 }
+                 break;
+ 
+-                case OP_MACRO: {
+-                    if (in_macro_body) return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
++                case OP_DEFINE: {
+                     if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+ 
+                     const valtype id_bytes{stack.PopBackValue()};
+                     uint8_t id;
+-                    if (!ParseMacroId(id_bytes, id)) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
++                    if (!ParseFunctionId(id_bytes, id)) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+ 
+-                    const valtype body_bytes{stack.PopBackValue()};
+-                    CScript body{body_bytes.begin(), body_bytes.end()};
+-                    if (!ValidateMacroBody(body, serror)) return false;
+-                    if (macro_state.definitions[id].has_value()) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+-                    macro_state.definitions[id].emplace(std::move(body));
++                    if (function_state.definitions[id].has_value()) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
++                    valtype body_bytes{stack.PopBackValue()};
++                    ++function_state.definition_count;
++                    function_state.stored_body_bytes += body_bytes.size();
++                    function_state.definitions[id].emplace(std::move(body_bytes));
+                 } break;
+ 
+-                case OP_CALLMACRO: {
+-                    if (in_macro_body) return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
++                case OP_INVOKE: {
+                     if (stack.size() < 1) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+ 
+                     const valtype id_bytes{stack.PopBackValue()};
+                     uint8_t id;
+-                    if (!ParseMacroId(id_bytes, id)) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+-                    if (!macro_state.definitions[id].has_value()) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
++                    if (!ParseFunctionId(id_bytes, id)) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
++                    if (!function_state.definitions[id].has_value() || function_state.active[id]) {
++                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
++                    }
+ 
+-                    const CScript& body{*macro_state.definitions[id]};
+-                    if (macro_state.executed_body_bytes > MAX_EXECUTED_MACRO_BODY_BYTES - body.size()) {
++                    const valtype& body_bytes{*function_state.definitions[id]};
++                    if (function_state.invoked_body_bytes > MAX_EXECUTED_FUNCTION_BODY_BYTES - body_bytes.size()) {
+                         return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
+                     }
+-                    macro_state.executed_body_bytes += body.size();
++                    function_state.invoked_body_bytes += body_bytes.size();
++                    if (!varops_budget.Spend(body_bytes.size() * varops::COST_COPYING)) {
++                        return set_error(serror, SCRIPT_ERR_VAROP_COUNT);
++                    }
++
++                    const CScript body{body_bytes.begin(), body_bytes.end()};
++                    const std::optional<bool> op_success{
++                        CheckTapscriptOpSuccess(body, flags, SigVersion::TAPSCRIPT_V2, serror)};
++                    if (op_success.has_value()) {
++                        if (!*op_success) return false;
++                        immediate_success = true;
++                        return true;
++                    }
++
++                    function_state.active[id] = true;
+                     if (!EvalTapscriptV2Impl(stack, body, flags, checker, execdata, varops_budget,
+-                                             serror, immediate_success, &macro_state, &altstack,
+-                                             /*in_macro_body=*/true)) {
++                                             serror, immediate_success, &function_state, &altstack,
++                                             /*in_function=*/true)) {
++                        function_state.active[id] = false;
+                         return false;
+                     }
++                    function_state.active[id] = false;
++                    if (immediate_success) return true;
+                 } break;
+ 
+                 case OP_MULTI: {
+@@ -2708,11 +2683,15 @@ static bool EvalTapscriptV2Impl(ValtypeStack& stack, const CScript& script, scri
+             }
+ 
+             // Size limits
+-            if (stack.size() + altstack.size() > MAX_TAPSCRIPT_V2_STACK_SIZE) {
++            const size_t stack_entries{stack.size() + altstack.size()};
++            if (function_state.definition_count > MAX_TAPSCRIPT_V2_STACK_SIZE ||
++                stack_entries > MAX_TAPSCRIPT_V2_STACK_SIZE - function_state.definition_count) {
+                 return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+             }
+ 
+-            if (stack.GetTotalSize() + altstack.GetTotalSize() > MAX_TAPSCRIPT_V2_TOTAL_STACK_SIZE) {
++            const size_t stack_bytes{stack.GetTotalSize() + altstack.GetTotalSize()};
++            if (function_state.stored_body_bytes > MAX_TAPSCRIPT_V2_TOTAL_STACK_SIZE ||
++                stack_bytes > MAX_TAPSCRIPT_V2_TOTAL_STACK_SIZE - function_state.stored_body_bytes) {
+                 return set_error(serror, SCRIPT_ERR_TOTAL_STACK_SIZE);
+             }
+ 
+diff --git a/src/script/script.cpp b/src/script/script.cpp
+index 43b3af9f68..302c2cc307 100644
+--- a/src/script/script.cpp
++++ b/src/script/script.cpp
+@@ -150,9 +150,9 @@ std::string GetOpName(opcodetype opcode)
+     // Opcode added by BIP 342 (Tapscript)
+     case OP_CHECKSIGADD            : return "OP_CHECKSIGADD";
+ 
+-    // Experimental Tapscript v2 reusable-function opcodes
+-    case OP_MACRO: return "OP_MACRO";
+-    case OP_CALLMACRO: return "OP_CALLMACRO";
++    // Opcodes proposed by the covenant-support-opcodes draft
++    case OP_DEFINE: return "OP_DEFINE";
++    case OP_INVOKE: return "OP_INVOKE";
+ 
+     // Opcode proposed by the OP_TX draft
+     case OP_TX: return "OP_TX";
+@@ -387,7 +387,7 @@ bool IsOpSuccess(const opcodetype& opcode, SigVersion sigversion)
+     if (sigversion == SigVersion::TAPSCRIPT_V2) {
+         return opcode == OP_1NEGATE || opcode == OP_RESERVED || opcode == OP_VER ||
+                (opcode >= OP_RESERVED1 && opcode <= OP_RESERVED2) || opcode == OP_NEGATE || opcode == OP_ABS ||
+-               (opcode >= 187 && opcode <= 254 && opcode != OP_MACRO && opcode != OP_CALLMACRO &&
++               (opcode >= 187 && opcode <= 254 && opcode != OP_DEFINE && opcode != OP_INVOKE &&
+                 opcode != OP_TX && opcode != OP_TWEAKADD && opcode != OP_MULTI &&
+                 opcode != OP_CHECKSIGFROMSTACK && opcode != OP_BYTEREV);
+     }
+diff --git a/src/script/script.h b/src/script/script.h
+index 21958af961..b99a98d3f1 100644
+--- a/src/script/script.h
++++ b/src/script/script.h
+@@ -218,9 +218,9 @@ enum opcodetype
+     // Opcode added by BIP 342 (Tapscript)
+     OP_CHECKSIGADD = 0xba,
+ 
+-    // Experimental Tapscript v2 reusable-function opcodes.
+-    OP_MACRO = 0xbb,
+-    OP_CALLMACRO = 0xbc,
++    // Opcodes proposed by the covenant-support-opcodes draft.
++    OP_DEFINE = 0xbb,
++    OP_INVOKE = 0xbc,
+ 
+     // Opcode proposed by the OP_TX draft
+     OP_TX = 0xbd,
+diff --git a/src/script/varops.h b/src/script/varops.h
+index d79cf05cc0..1cb5569d8e 100644
+--- a/src/script/varops.h
++++ b/src/script/varops.h
+@@ -16,13 +16,15 @@
+ 
+ namespace varops {
+ 
+-// Fixed cost of one logical opcode execution. Data-dependent costs are additional.
+-static constexpr uint64_t COST_PER_OPCODE = 1'000;
++// Fixed cost of one logical opcode execution. At 10,000 budget units per weight
++// unit, this caps fixed-cost opcode density at eight executions per weight unit.
++// Data-dependent costs are additional.
++static constexpr uint64_t COST_PER_OPCODE = 1'250;
+ 
+ constexpr uint64_t ExecutionCost(opcodetype opcode)
+ {
+     switch (opcode) {
+-    case OP_CALLMACRO:
++    case OP_INVOKE:
+         return 4'000;
+     case OP_MUL:
+     case OP_DIV:
+@@ -30,7 +32,6 @@ constexpr uint64_t ExecutionCost(opcodetype opcode)
+     case OP_RIPEMD160:
+     case OP_SHA1:
+     case OP_HASH256:
+-    case OP_HASH160:
+     case OP_0NOTEQUAL:
+     case OP_NUMEQUAL:
+     case OP_NUMEQUALVERIFY:
+@@ -46,6 +47,8 @@ constexpr uint64_t ExecutionCost(opcodetype opcode)
+     case OP_LSHIFT:
+     case OP_RSHIFT:
+         return 3'000;
++    case OP_HASH160:
++        return 4'000;
+     default:
+         return COST_PER_OPCODE;
+     }
+diff --git a/test/functional/test_framework/script.py b/test/functional/test_framework/script.py
+index a33a0d917f..be6cb33fe9 100644
+--- a/test/functional/test_framework/script.py
++++ b/test/functional/test_framework/script.py
+@@ -258,8 +258,8 @@ OP_NOP10 = CScriptOp(0xb9)
+ OP_CHECKSIGADD = CScriptOp(0xba)
+ 
+ # Experimental Tapscript v2 reusable-function opcodes
+-OP_MACRO = CScriptOp(0xbb)
+-OP_CALLMACRO = CScriptOp(0xbc)
++OP_DEFINE = CScriptOp(0xbb)
++OP_INVOKE = CScriptOp(0xbc)
+ 
+ # OP_TX draft opcode
+ OP_TX = CScriptOp(0xbd)
+@@ -391,8 +391,8 @@ OPCODE_NAMES.update({
+     OP_NOP9: 'OP_NOP9',
+     OP_NOP10: 'OP_NOP10',
+     OP_CHECKSIGADD: 'OP_CHECKSIGADD',
+-    OP_MACRO: 'OP_MACRO',
+-    OP_CALLMACRO: 'OP_CALLMACRO',
++    OP_DEFINE: 'OP_DEFINE',
++    OP_INVOKE: 'OP_INVOKE',
+     OP_TX: 'OP_TX',
+     OP_TWEAKADD: 'OP_TWEAKADD',
+     OP_MULTI: 'OP_MULTI',
