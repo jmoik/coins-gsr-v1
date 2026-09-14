@@ -1,5 +1,73 @@
 # Coins + GSR v1 Bridge
 
+## Tutorial: Run v1
+
+### Backends used
+
+- **Bitcoin:** the pinned `gsr-full` Bitcoin Core build, not upstream Core. It
+  provides Tapscript v2, BIP 440/441 Script Restoration, OP_TX, and macros. The
+  retained deployment uses Core revision `7debf4af` plus
+  `patches/gsr-core-runtime.patch`.
+- **Proving:** SP1 6.0.1's CPU prover plus `patches/sp1-deferred-memory.patch`.
+  SP1 executes the Rust guest and wraps its execution proof as Groth16.
+- **On-chain verification:** the 76,400-byte pure-GSR Groth16 verifier. It uses
+  restored Script arithmetic and macros; it does **not** use the later
+  experimental field or native pairing opcodes.
+
+Exact revisions, patch hashes, and retained binary hashes are in
+[`sources.lock.json`](sources.lock.json).
+
+### Replay the retained proofs
+
+From this repository, first check the small retained artifacts:
+
+```bash
+python3 tests/check_vectors.py
+python3 tests/check_deployment.py fixtures/v1
+```
+
+Then point the functional test at the built GSR Core backend:
+
+```bash
+gsr_core=../../core/gsr/gsr-full
+COINS_GSR_VERIFIER=$PWD/fixtures/v1/collection-1/script.json \
+COINS_GSR_PROOF_FIXTURES=$PWD/fixtures/v1 \
+python3 tests/feature_bridge.py \
+  --configfile=$gsr_core/build/test/config.ini \
+  --tmpdir=/private/tmp/coins-gsr-v1-replay
+```
+
+This creates a disposable regtest and replays genesis, both proof-authorized
+collections, the transfer/withdrawal settlement, negative cases, reorganization,
+and refund. It does not regenerate proofs.
+
+### Regenerate all three proofs
+
+Full proving takes minutes to hours and requires the pinned source checkouts in
+`sources.lock.json`. Verify those checkouts and binaries first:
+
+```bash
+scripts/check-sources.sh
+COINS_GSR_CARGO_PROVE=/path/to/sp1-6.0.1/cargo-prove scripts/build-guest.sh
+scripts/build-patched-prover.sh /private/tmp/coins-gsr-sp1
+```
+
+Create a new non-overwriting lifecycle directory, prove, and submit:
+
+```bash
+gsr_core=../../core/gsr/gsr-full
+run_dir=/private/tmp/coins-gsr-v1-run
+python3 scripts/lifecycle.py --work $run_dir --core $gsr_core genesis \
+  --verifier fixtures/v1/collection-1/script.json
+python3 scripts/lifecycle.py --work $run_dir --core $gsr_core deposit
+python3 scripts/lifecycle.py --work $run_dir --core $gsr_core prove \
+  --patched-host /private/tmp/coins-gsr-sp1/bin/coins-gsr-prover-host
+python3 scripts/lifecycle.py --work $run_dir --core $gsr_core submit
+python3 scripts/lifecycle.py --work $run_dir --core $gsr_core inspect
+```
+
+The lifecycle commands refuse to overwrite existing proof or result artifacts.
+
 ## What We Built
 
 This repository contains a bounded, proof-authorized Bitcoin bridge prototype.
@@ -90,30 +158,6 @@ The common pure-GSR verifier is 76,400 bytes. Proof generation took minutes to
 hours on the test machine and is not suitable for a mobile prover. The separate
 five-field-opcode verifier research is substantially smaller and faster, but is
 not part of this retained v1 deployment.
-
-## Reproduce the Retained Deployment
-
-Run the inexpensive artifact checks:
-
-```bash
-python3 tests/check_vectors.py
-python3 tests/check_deployment.py fixtures/v1
-scripts/check-sources.sh
-```
-
-Replay the proof-authorized lifecycle with the pinned GSR Core build:
-
-```bash
-COINS_GSR_VERIFIER=$PWD/fixtures/v1/collection-1/script.json \
-COINS_GSR_PROOF_FIXTURES=$PWD/fixtures/v1 \
-python3 tests/feature_bridge.py \
-  --configfile=../../core/gsr/gsr-full/build/test/config.ini \
-  --tmpdir=/private/tmp/coins-gsr-v1-replay
-```
-
-Proof generation is intentionally separate and expensive. Run
-`scripts/lifecycle.py --help`; lifecycle commands refuse to overwrite existing
-artifacts.
 
 ## Enforcement Boundary
 
